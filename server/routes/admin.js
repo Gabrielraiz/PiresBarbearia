@@ -1,7 +1,83 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const { getDb } = require('../database');
 const { authenticateAdmin } = require('../middleware/auth');
+const {
+  backupDatabase,
+  listBackups,
+  restoreBackup,
+} = require('../integrations/supabase');
+
+const DB_FILE = path.join(__dirname, '..', '..', 'barbearia.db');
+
+function getAllTablesSnapshot(db) {
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all();
+  const snapshot = {};
+  for (const table of tables) {
+    const tableName = table.name;
+    snapshot[tableName] = db.prepare(`SELECT * FROM ${tableName}`).all();
+  }
+  return snapshot;
+}
+
+router.post('/backup', authenticateAdmin, async (req, res) => {
+  try {
+    const result = await backupDatabase();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get('/backup/download', authenticateAdmin, (req, res) => {
+  if (!fs.existsSync(DB_FILE)) {
+    return res.status(404).json({ message: 'Arquivo de banco não encontrado' });
+  }
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const filename = `backup-${stamp}.db`;
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Type', 'application/octet-stream');
+  return res.sendFile(DB_FILE);
+});
+
+router.get('/backup/full', authenticateAdmin, (req, res) => {
+  try {
+    const db = getDb();
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      database: getAllTablesSnapshot(db),
+    };
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="backup-full-${Date.now()}.json"`);
+    res.send(JSON.stringify(payload));
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.get('/backups', authenticateAdmin, async (req, res) => {
+  try {
+    const backups = await listBackups();
+    res.json(backups);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+router.post('/restore/:filename', authenticateAdmin, async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const backupData = await restoreBackup(filename);
+    res.json({ 
+      message: 'Backup carregado com sucesso',
+      data: backupData 
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
 
 router.get('/clients', authenticateAdmin, (req, res) => {
   const db = getDb();

@@ -3,9 +3,28 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const { initDb, getDb } = require('./database');
 
 const app = express();
+
+// Segurança: Adiciona cabeçalhos HTTP seguros
+app.use(helmet({
+  contentSecurityPolicy: false, // Desativado para facilitar carregamento de recursos externos se necessário
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
+
+// Segurança: Limita o número de requisições por IP (Rate Limit)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 500, // Limite de 500 requisições por IP por janela
+  message: { message: 'Muitas requisições vindas deste IP, tente novamente após 15 minutos.' }
+});
+
+// Aplica o limitador apenas às rotas da API
+app.use('/api/', limiter);
+
 const PORT = process.env.PORT || 3001;
 
 const uploadsDir = path.join(__dirname, '..', 'uploads');
@@ -34,10 +53,16 @@ initDb().then(() => {
   const notificationsRoutes = require('./routes/notifications');
   const paymentsRoutes = require('./routes/payments');
   const oauthRoutes = require('./routes/oauth');
-  const backupRoutes = require('./routes/backup');
+  const blockoutsRoutes = require('./routes/blockouts');
+  const securityRoutes = require('./routes/security');
+  const modulesRoutes = require('./routes/modules');
+  const promotionsRoutes = require('./routes/promotions');
+  const partnersRoutes = require('./routes/partners');
+  const loyaltyRoutes = require('./routes/loyalty');
 
   app.use('/api/auth', authRoutes);
   app.use('/api/oauth', oauthRoutes);
+  app.use('/api/security', securityRoutes);
   app.use('/api/appointments', appointmentsRoutes);
   app.use('/api/services', servicesRoutes);
   app.use('/api/barbers', barbersRoutes);
@@ -48,18 +73,11 @@ initDb().then(() => {
   app.use('/api/media', mediaRoutes);
   app.use('/api/notifications', notificationsRoutes);
   app.use('/api/payments', paymentsRoutes);
-  app.use('/api/backup', backupRoutes);
-
-  app.get('/api/backup', require('./middleware/auth').authenticateAdmin, (req, res) => {
-    const db = getDb();
-    const tables = ['users', 'barbers', 'services', 'appointments', 'reviews', 'media', 'settings', 'business_hours', 'barber_schedules', 'notifications'];
-    const backup = { timestamp: new Date().toISOString() };
-    for (const table of tables) {
-      try { backup[table] = db.prepare(`SELECT * FROM ${table}`).all(); } catch { backup[table] = []; }
-    }
-    res.setHeader('Content-Disposition', `attachment; filename=backup_${Date.now()}.json`);
-    res.json(backup);
-  });
+  app.use('/api/blockouts', blockoutsRoutes);
+  app.use('/api/modules', modulesRoutes);
+  app.use('/api/promotions', promotionsRoutes);
+  app.use('/api/partners', partnersRoutes);
+  app.use('/api/loyalty', loyaltyRoutes);
 
   app.get('*', (req, res) => {
     const indexPath = path.join(__dirname, '..', 'client', 'dist', 'index.html');
@@ -71,7 +89,9 @@ initDb().then(() => {
   });
 
   app.listen(PORT, () => {
-    console.log(`PiresQK Barbearia server running on http://localhost:${PORT}`);
+    console.log(`\n🚀 SERVER RUNNING: http://localhost:${PORT}`);
+    console.log(`📡 API ENDPOINT: http://localhost:${PORT}/api`);
+    console.log(`🌐 DEV FRONTEND: http://localhost:5173 (Use this while developing)\n`);
   });
 }).catch(err => {
   console.error('Failed to initialize database:', err);

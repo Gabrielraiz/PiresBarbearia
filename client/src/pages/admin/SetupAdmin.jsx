@@ -1,21 +1,37 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Icons } from '../../components/Icons';
+import Icons from '../../components/Icons';
 import api from '../../api';
 
 export default function SetupAdmin() {
   const navigate = useNavigate();
   const [form, setForm] = useState({
-    name: 'Admin PiresQK',
-    email: 'pireskqk@gmail.com',
-    phone: '(49) 99918-3044',
-    password: 'Yuri2209',
-    confirmPassword: 'Yuri2209'
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirmPassword: ''
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showPass, setShowPass] = useState(false);
+  const [captcha, setCaptcha] = useState({ captchaId: '', challenge: '' });
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
+
+  React.useEffect(() => {
+    loadCaptcha();
+  }, []);
+
+  const loadCaptcha = async () => {
+    try {
+      const { data } = await api.get('/security/captcha');
+      setCaptcha(data);
+      setCaptchaAnswer('');
+    } catch {
+      setCaptcha({ captchaId: '', challenge: '' });
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,7 +50,9 @@ export default function SetupAdmin() {
         email: form.email,
         password: form.password,
         name: form.name,
-        phone: form.phone
+        phone: form.phone,
+        captcha_id: captcha.captchaId,
+        captcha_answer: captchaAnswer,
       });
 
       setSuccess('✓ Admin configurado com sucesso! Redirecionando para login...');
@@ -43,6 +61,7 @@ export default function SetupAdmin() {
       }, 2000);
     } catch (err) {
       setError(err.response?.data?.message || 'Erro ao configurar admin');
+      await loadCaptcha();
     } finally {
       setLoading(false);
     }
@@ -149,6 +168,23 @@ export default function SetupAdmin() {
                   onChange={e => setForm({ ...form, confirmPassword: e.target.value })}
                   className="input-dark pl-9 pr-10"
                   placeholder="••••••••"
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="flex items-center justify-between text-[#a0a0a0] text-xs mb-2 tracking-widest">
+                CAPTCHA
+                <button type="button" onClick={loadCaptcha} className="text-[#f5b800] text-[10px]">TROCAR</button>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="input-dark flex items-center justify-center font-black tracking-widest">{captcha.challenge || '...'}</div>
+                <input
+                  value={captchaAnswer}
+                  onChange={e => setCaptchaAnswer(e.target.value)}
+                  className="input-dark"
+                  placeholder="Resposta"
                   required
                 />
               </div>

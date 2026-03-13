@@ -2,10 +2,18 @@ const express = require('express');
 const router = express.Router();
 const { getDb } = require('../database');
 const { authenticateAdmin } = require('../middleware/auth');
+const { getAvailableSlotsForBarber } = require('../scheduling');
 
 router.get('/', (req, res) => {
   const db = getDb();
-  const barbers = db.prepare('SELECT b.*, GROUP_CONCAT(bs.day_of_week || ":" || bs.start_time || "-" || bs.end_time) as schedules FROM barbers b LEFT JOIN barber_schedules bs ON b.id = bs.barber_id AND bs.active = 1 WHERE b.active = 1 GROUP BY b.id').all();
+  const barbers = db.prepare(`
+    SELECT 
+      b.*, 
+      (SELECT AVG(r.rating) FROM reviews r WHERE r.barber_id = b.id AND r.approved = 1) as avg_rating,
+      (SELECT COUNT(r.id) FROM reviews r WHERE r.barber_id = b.id AND r.approved = 1) as review_count
+    FROM barbers b
+    WHERE b.active = 1
+  `).all();
   res.json(barbers);
 });
 
@@ -17,7 +25,27 @@ router.get('/all', authenticateAdmin, (req, res) => {
 
 router.get('/:id/schedules', (req, res) => {
   const db = getDb();
-  const schedules = db.prepare('SELECT * FROM barber_schedules WHERE barber_id = ? AND active = 1').all(req.params.id);
+  const rows = db.prepare('SELECT * FROM barber_schedules WHERE barber_id = ? ORDER BY day_of_week ASC').all(req.params.id);
+  const business = db.prepare('SELECT day_of_week, open_time, close_time, is_closed FROM business_hours').all();
+  const byDay = new Map(rows.map((row) => [Number(row.day_of_week), row]));
+  const businessByDay = new Map(business.map((row) => [Number(row.day_of_week), row]));
+  const schedules = [];
+  for (let day = 0; day <= 6; day++) {
+    const own = byDay.get(day);
+    if (own) {
+      schedules.push(own);
+    } else {
+      const fallback = businessByDay.get(day);
+      schedules.push({
+        id: null,
+        barber_id: Number(req.params.id),
+        day_of_week: day,
+        start_time: fallback?.open_time || '09:00',
+        end_time: fallback?.close_time || '20:00',
+        active: fallback?.is_closed ? 0 : 1,
+      });
+    }
+  }
   res.json(schedules);
 });
 
@@ -25,26 +53,7 @@ router.get('/:id/available-slots', (req, res) => {
   const { date, service_id } = req.query;
   if (!date) return res.status(400).json({ message: 'Data é obrigatória' });
   const db = getDb();
-  const dateObj = new Date(date);
-  const dayOfWeek = dateObj.getDay();
-  const schedule = db.prepare('SELECT * FROM barber_schedules WHERE barber_id = ? AND day_of_week = ? AND active = 1').get(req.params.id, dayOfWeek);
-  if (!schedule) return res.json([]);
-  const service = service_id ? db.prepare('SELECT duration FROM services WHERE id = ?').get(service_id) : null;
-  const interval = parseInt(db.prepare("SELECT value FROM settings WHERE key = 'appointment_interval'").get()?.value || '30');
-  const slots = [];
-  const [startH, startM] = schedule.start_time.split(':').map(Number);
-  const [endH, endM] = schedule.end_time.split(':').map(Number);
-  let current = startH * 60 + startM;
-  const end = endH * 60 + endM;
-  const duration = service ? service.duration : interval;
-  const booked = db.prepare("SELECT time FROM appointments WHERE barber_id = ? AND date = ? AND status NOT IN ('cancelled')").all(req.params.id, date).map(a => a.time);
-  while (current + duration <= end) {
-    const h = Math.floor(current / 60).toString().padStart(2, '0');
-    const m = (current % 60).toString().padStart(2, '0');
-    const timeStr = `${h}:${m}`;
-    if (!booked.includes(timeStr)) slots.push(timeStr);
-    current += interval;
-  }
+  const slots = getAvailableSlotsForBarber(db, { barberId: req.params.id, date, serviceId: service_id });
   res.json(slots);
 });
 
@@ -81,30 +90,30 @@ router.put('/:id/schedules', authenticateAdmin, (req, res) => {
 });
 
 router.delete('/:id', authenticateAdmin, (req, res) => {
-  const { force } = req.query;
   const db = getDb();
   
-  if (force === 'true') {
-    try {
-      // Primeiro remover horários
-      db.prepare('DELETE FROM barber_schedules WHERE barber_id = ?').run(req.params.id);
-      // Tentar deletar o barbeiro
-      db.prepare('DELETE FROM barbers WHERE id = ?').run(req.params.id);
-      return res.json({ message: 'Barbeiro excluído permanentemente' });
-    } catch (error) {
-      if (error.message.includes('FOREIGN KEY')) {
-        return res.status(400).json({ 
-          message: 'Não é possível excluir: este barbeiro possui agendamentos vinculados. Desative-o em vez disso.',
-          canDisable: true 
-        });
-      }
-      throw error;
+  try {
+    // Primeiro remover horários
+    db.prepare('DELETE FROM barber_schedules WHERE barber_id = ?').run(req.params.id);
+    
+    // Tentar deletar o barbeiro
+    const result = db.prepare('DELETE FROM barbers WHERE id = ?').run(req.params.id);
+    
+    if (result.changes === 0) {
+      return res.status(404).json({ message: 'Barbeiro não encontrado' });
     }
+    
+    res.json({ message: 'Barbeiro excluído permanentemente do sistema' });
+  } catch (error) {
+    if (error.message.includes('FOREIGN KEY')) {
+      // Se houver agendamentos, apenas desativa
+      db.prepare('UPDATE barbers SET active = 0 WHERE id = ?').run(req.params.id);
+      return res.json({ 
+        message: 'O barbeiro possui agendamentos vinculados e foi apenas desativado para preservar o histórico.' 
+      });
+    }
+    res.status(500).json({ message: 'Erro ao excluir barbeiro: ' + error.message });
   }
-
-  // Comportamento padrão: apenas desativa
-  db.prepare('UPDATE barbers SET active = 0 WHERE id = ?').run(req.params.id);
-  res.json({ message: 'Barbeiro desativado' });
 });
 
 module.exports = router;

@@ -151,7 +151,35 @@ async function initDb() {
   return _db;
 }
 
+function ensureColumnExists(db, table, column, definition) {
+  try {
+    const info = db.prepare(`PRAGMA table_info(${table})`).all();
+    const exists = info.some(col => col.name === column);
+    if (!exists) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+      console.log(`Column ${column} added to ${table}`);
+    }
+  } catch (e) {
+    console.error(`Error ensuring column ${column} exists in ${table}:`, e);
+  }
+}
+
 function initializeDatabase(db) {
+  // Migrations for existing tables
+  ensureColumnExists(db, 'users', 'role_label', "TEXT DEFAULT 'MEMBRO CLUB'");
+  ensureColumnExists(db, 'users', 'privileges_json', "TEXT DEFAULT '{}'");
+  ensureColumnExists(db, 'promotions', 'is_secret', 'INTEGER DEFAULT 0');
+  ensureColumnExists(db, 'promotions', 'service_id', 'INTEGER');
+  ensureColumnExists(db, 'promotions', 'min_value', 'REAL DEFAULT 0');
+  ensureColumnExists(db, 'users', 'loyalty_points', 'INTEGER DEFAULT 0');
+  ensureColumnExists(db, 'users', 'partner_id', 'INTEGER');
+
+  ensureColumnExists(db, 'loyalty_rewards', 'title_es', 'TEXT');
+  ensureColumnExists(db, 'loyalty_rewards', 'description_es', 'TEXT');
+  ensureColumnExists(db, 'loyalty_rewards', 'reward_type', "TEXT DEFAULT 'service'");
+  ensureColumnExists(db, 'loyalty_rewards', 'service_id', 'INTEGER');
+  ensureColumnExists(db, 'loyalty_rewards', 'discount_value', 'REAL DEFAULT 0');
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -160,10 +188,53 @@ function initializeDatabase(db) {
       phone TEXT,
       password TEXT NOT NULL,
       role TEXT DEFAULT 'client',
+      role_label TEXT DEFAULT 'MEMBRO CLUB',
+      privileges_json TEXT DEFAULT '{}',
       photo TEXT,
       language TEXT DEFAULT 'pt',
+      loyalty_points INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS partners (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      description_pt TEXT,
+      description_en TEXT,
+      discount_value REAL DEFAULT 0,
+      discount_type TEXT DEFAULT 'percentage',
+      photo TEXT,
+      active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS loyalty_rewards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title_pt TEXT NOT NULL,
+      title_en TEXT,
+      title_es TEXT,
+      description_pt TEXT,
+      description_en TEXT,
+      description_es TEXT,
+      points_required INTEGER NOT NULL,
+      reward_type TEXT DEFAULT 'service',
+      service_id INTEGER,
+      discount_value REAL DEFAULT 0,
+      active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS loyalty_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      points INTEGER NOT NULL,
+      type TEXT NOT NULL, -- 'earned' or 'spent'
+      description_pt TEXT,
+      description_en TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS barbers (
@@ -171,9 +242,30 @@ function initializeDatabase(db) {
       name TEXT NOT NULL,
       specialty TEXT,
       photo TEXT,
+      photos_json TEXT DEFAULT '[]',
       bio TEXT,
       active INTEGER DEFAULT 1,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS promotions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title_pt TEXT NOT NULL,
+      title_en TEXT,
+      description_pt TEXT,
+      description_en TEXT,
+      discount_type TEXT DEFAULT 'percentage',
+      discount_value REAL,
+      code TEXT UNIQUE,
+      start_date TEXT,
+      end_date TEXT,
+      active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS user_privileges (
+      user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      privileges_json TEXT DEFAULT '{}'
     );
 
     CREATE TABLE IF NOT EXISTS barber_schedules (
@@ -235,6 +327,30 @@ function initializeDatabase(db) {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS media_likes (
+      media_id INTEGER NOT NULL REFERENCES media(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (media_id, user_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS media_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      media_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      comment TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (media_id) REFERENCES media(id) ON DELETE CASCADE,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS blockouts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      reason TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE TABLE IF NOT EXISTS settings (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       key TEXT UNIQUE NOT NULL,
@@ -259,13 +375,75 @@ function initializeDatabase(db) {
       close_time TEXT,
       is_closed INTEGER DEFAULT 0
     );
+
+    CREATE TABLE IF NOT EXISTS auth_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT,
+      role TEXT,
+      success INTEGER DEFAULT 0,
+      ip TEXT,
+      user_agent TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS module_pages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      module_key TEXT UNIQUE NOT NULL,
+      content_json TEXT DEFAULT '{}',
+      theme_json TEXT DEFAULT '{}',
+      seo_json TEXT DEFAULT '{}',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS module_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      module_key TEXT NOT NULL,
+      item_type TEXT DEFAULT 'card',
+      title_pt TEXT,
+      title_en TEXT,
+      subtitle_pt TEXT,
+      subtitle_en TEXT,
+      description_pt TEXT,
+      description_en TEXT,
+      badge_pt TEXT,
+      badge_en TEXT,
+      cta_label_pt TEXT,
+      cta_label_en TEXT,
+      cta_to TEXT,
+      price_label TEXT,
+      event_date TEXT,
+      location_label TEXT,
+      status_label TEXT,
+      capacity_label TEXT,
+      media_url TEXT,
+      slug TEXT,
+      data_json TEXT DEFAULT '{}',
+      position INTEGER DEFAULT 0,
+      active INTEGER DEFAULT 1,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
-  const adminExists = db.prepare('SELECT id FROM users WHERE email = ?').get('pireskqk@gmail.com');
-  if (!adminExists) {
-    const hashedPassword = bcrypt.hashSync('Yuri2209', 10);
-    db.prepare('INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, ?, ?)')
-      .run('Admin PiresQK', 'pireskqk@gmail.com', '(49) 99918-3044', hashedPassword, 'admin');
+  const setupEmail = process.env.ADMIN_SETUP_EMAIL;
+  const setupPassword = process.env.ADMIN_SETUP_PASSWORD;
+  if (setupEmail && setupPassword) {
+    const hashedPassword = bcrypt.hashSync(setupPassword, 10);
+    const targetByEmail = db.prepare('SELECT id FROM users WHERE email = ?').get(setupEmail);
+    if (targetByEmail) {
+      db.prepare('UPDATE users SET password = ?, role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(hashedPassword, 'admin', targetByEmail.id);
+    } else {
+      const currentAdmin = db.prepare('SELECT id FROM users WHERE role = ? ORDER BY id ASC LIMIT 1').get('admin');
+      if (currentAdmin) {
+        db.prepare('UPDATE users SET email = ?, password = ?, role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+          .run(setupEmail, hashedPassword, 'admin', currentAdmin.id);
+      } else {
+        db.prepare('INSERT INTO users (name, email, phone, password, role, role_label, privileges_json) VALUES (?, ?, ?, ?, ?, ?, ?)')
+          .run('Admin', setupEmail, null, hashedPassword, 'admin', 'ADMIN MASTER', '{}');
+      }
+    }
   }
 
   const servicesCount = db.prepare('SELECT COUNT(*) as count FROM services').get();
@@ -306,10 +484,58 @@ function initializeDatabase(db) {
     ['appointment_interval', '30'],
     ['primary_color', '#F5B800'],
     ['language', 'pt'],
+    ['map_embed_url', ''],
+    ['hero_bg', ''],
+    ['site_logo', ''],
+    ['theme', 'dark'],
+    ['payments_enabled', '0'],
+    ['payments_allow_cart', '0'],
+    ['payment_provider', 'mercadopago'],
+    ['mercadopago_access_token', ''],
+    ['stripe_secret_key', ''],
+    ['stripe_public_key', ''],
+    ['business_type', 'barbershop'],
+    ['feature_booking', '1'],
+    ['feature_services', '1'],
+    ['feature_team', '1'],
+    ['feature_gallery', '1'],
+    ['feature_contact', '1'],
+    ['feature_map', '1'],
+    ['feature_whatsapp', '1'],
+    ['feature_reviews', '1'],
   ];
   for (const [key, value] of defaultSettings) {
     const exists = db.prepare('SELECT id FROM settings WHERE key = ?').get(key);
     if (!exists) db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(key, value);
+  }
+
+  // Seeding initial module pages for barbershop only
+  const initialModules = [
+    {
+      key: 'barbershop__about',
+      content: {
+        title_pt: 'Sobre nós',
+        title_en: 'About us',
+        lead_pt: 'Conheça nossa barbearia especializada em cortes modernos e clássicos.',
+        lead_en: 'Discover our barbershop specialized in modern and classic cuts.',
+        cta_primary_label_pt: 'Agendar agora',
+        cta_primary_label_en: 'Book now',
+        cta_primary_to: '/booking',
+        cta_secondary_label_pt: 'Ver serviços',
+        cta_secondary_label_en: 'See services',
+        cta_secondary_to: '/services',
+        business_profile: 'barbershop'
+      },
+      theme: { accent_from: 'from-blue-500/20', accent_to: 'to-indigo-500/10' }
+    }
+  ];
+
+  for (const mod of initialModules) {
+    const exists = db.prepare('SELECT id FROM module_pages WHERE module_key = ?').get(mod.key);
+    if (!exists) {
+      db.prepare('INSERT INTO module_pages (module_key, content_json, theme_json) VALUES (?, ?, ?)')
+        .run(mod.key, JSON.stringify(mod.content), JSON.stringify(mod.theme));
+    }
   }
 
   const schedulesCount = db.prepare('SELECT COUNT(*) as count FROM barber_schedules').get();

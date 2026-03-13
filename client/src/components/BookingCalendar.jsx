@@ -1,15 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useSettings } from '../contexts/SettingsContext';
-import api from '../api';
-import { Icons } from './Icons';
+import React, { useState } from 'react';
+import Icons from './Icons';
 
 const DAYS = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 const MONTHS = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
-export default function BookingCalendar({ onDateSelect, selectedDate, barberId, serviceId, appointmentsData }) {
-  const { settings } = useSettings();
+export default function BookingCalendar({ onDateSelect, selectedDate }) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [bookedDates, setBookedDates] = useState([]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();

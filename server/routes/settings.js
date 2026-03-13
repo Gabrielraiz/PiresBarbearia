@@ -3,12 +3,26 @@ const router = express.Router();
 const { getDb } = require('../database');
 const { authenticate, authenticateAdmin } = require('../middleware/auth');
 
-router.get('/', (req, res) => {
+let settingsCache = null;
+let settingsCacheAt = 0;
+const SETTINGS_CACHE_TTL = 30000;
+
+function loadSettings(force = false) {
+  const now = Date.now();
+  if (!force && settingsCache && now - settingsCacheAt < SETTINGS_CACHE_TTL) {
+    return settingsCache;
+  }
   const db = getDb();
-  const settings = db.prepare('SELECT key, value FROM settings').all();
+  const rows = db.prepare('SELECT key, value FROM settings').all();
   const obj = {};
-  for (const s of settings) obj[s.key] = s.value;
-  res.json(obj);
+  for (const row of rows) obj[row.key] = row.value;
+  settingsCache = obj;
+  settingsCacheAt = now;
+  return obj;
+}
+
+router.get('/', (req, res) => {
+  res.json(loadSettings());
 });
 
 router.put('/', authenticateAdmin, (req, res) => {
@@ -17,10 +31,7 @@ router.put('/', authenticateAdmin, (req, res) => {
   for (const [key, value] of Object.entries(req.body)) {
     update.run(key, value);
   }
-  const settings = db.prepare('SELECT key, value FROM settings').all();
-  const obj = {};
-  for (const s of settings) obj[s.key] = s.value;
-  res.json(obj);
+  res.json(loadSettings(true));
 });
 
 router.get('/business-hours', (req, res) => {

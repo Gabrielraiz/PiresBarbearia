@@ -1,29 +1,47 @@
 import React from 'react';
+import { useSettings } from '../contexts/SettingsContext';
 
 export default function GoogleMap({
-  address = 'Piresqk Barbearia, Brazil',
+  address: propAddress,
   zoom = 17,
   height = '400px'
 }) {
-  // Usando Google Maps Embed API (GRATUITA E ILIMITADA)
-  const embedUrl = `https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY}&q=${encodeURIComponent(address)}&zoom=${zoom}`;
+  const { settings } = useSettings();
+  const address = propAddress || settings.address || 'R. Cinco Mil, Quinhentos e Nove, 191 - Da Várzea';
+  
+  // Verifica se a URL de embed é válida e externa. Se carregar o próprio site, vai dar loop ou erro.
+  const isExternalEmbed = settings.map_embed_url && (settings.map_embed_url.startsWith('http') || settings.map_embed_url.startsWith('https'));
+  
+  const embedUrl = isExternalEmbed ? settings.map_embed_url : 
+    `https://www.google.com/maps/embed/v1/place?key=${import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY || ''}&q=${encodeURIComponent(address)}&zoom=${zoom}`;
+
+  if (!isExternalEmbed && !import.meta.env.VITE_GOOGLE_MAPS_EMBED_API_KEY) {
+    // Fallback para link direto caso não tenha API Key nem Embed URL
+    const mapLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+    return (
+      <div className="w-full relative rounded-2xl overflow-hidden border border-[var(--border)] bg-[var(--bg-card)] flex flex-col items-center justify-center text-center p-8 gap-4" style={{ height }}>
+        <div className="w-16 h-16 rounded-full bg-[var(--gold)]/10 flex items-center justify-center text-[var(--gold)] mb-2">
+          <Icons.MapPin size={32} />
+        </div>
+        <h3 className="font-bold text-[var(--text-primary)] uppercase tracking-widest">{settings.site_name || 'PiresQK Barbearia'}</h3>
+        <p className="text-xs text-[var(--text-secondary)] max-w-xs">{address}</p>
+        <a href={mapLink} target="_blank" rel="noreferrer" className="btn-gold px-8 py-3 text-[10px] font-black tracking-widest uppercase mt-2">
+          VER NO GOOGLE MAPS
+        </a>
+      </div>
+    );
+  }
 
   return (
     <div
-      style={{
-        width: '100%',
-        height: height,
-        borderRadius: '12px',
-        overflow: 'hidden',
-        border: '1px solid #2a2a2a',
-        position: 'relative'
-      }}
+      className="w-full relative rounded-2xl overflow-hidden border border-[var(--border)] shadow-2xl"
+      style={{ height: height }}
     >
       <iframe
         src={embedUrl}
         width="100%"
         height="100%"
-        style={{ border: 0 }}
+        style={{ border: 0, filter: settings.theme === 'dark' ? 'invert(90%) hue-rotate(180deg)' : 'none' }}
         allowFullScreen=""
         loading="lazy"
         referrerPolicy="no-referrer-when-downgrade"
@@ -31,24 +49,23 @@ export default function GoogleMap({
       />
 
       {/* Overlay com informações */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '10px',
-          left: '10px',
-          background: 'rgba(0,0,0,0.8)',
-          color: 'white',
-          padding: '8px 12px',
-          borderRadius: '6px',
-          fontSize: '12px',
-          fontFamily: 'Arial, sans-serif'
-        }}
-      >
-        <div style={{ fontWeight: 'bold', marginBottom: '2px' }}>
-          📍 PiresQK Barbearia
+      <div className="absolute bottom-4 left-4 right-4 md:right-auto bg-[var(--bg-card)] border border-[var(--border)] p-4 rounded-xl shadow-xl backdrop-blur-md bg-opacity-90">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-full bg-[var(--gold)] flex items-center justify-center text-black shrink-0">
+            <span className="text-xl">📍</span>
+          </div>
+          <div>
+            <div className="font-bold text-[var(--text-primary)] mb-0.5">
+              {settings.site_name || 'PiresQK Barbearia'}
+            </div>
+            <div className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              {address}
+            </div>
+            <div className="text-[10px] mt-2 font-bold text-[var(--gold)] uppercase tracking-wider">
+              Seg-Sab: 09:00 - 20:00
+            </div>
+          </div>
         </div>
-        <div>Rua das Flores, 123 - Centro</div>
-        <div>Seg-Sab: 09:00 - 20:00</div>
       </div>
     </div>
   );

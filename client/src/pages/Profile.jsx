@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
-import { Icons } from '../components/Icons';
+import Icons from '../components/Icons';
 import api from '../api';
 
 export default function Profile() {
@@ -74,117 +74,232 @@ export default function Profile() {
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto">
-      <div className="mb-6">
-        <h1 className="page-title text-3xl text-white mb-1">{lang ? 'MY PROFILE' : 'MEU PERFIL'}</h1>
+    <div className="p-4 md:p-10 max-w-4xl mx-auto min-h-screen bg-[var(--bg-main)]">
+      <div className="mb-12 text-center md:text-left">
+        <h1 className="font-display font-black text-5xl md:text-6xl text-[var(--text-primary)] tracking-tighter mb-4 uppercase italic">
+          {lang ? 'MY' : 'MEU'} <span className="text-[var(--gold)]">PERFIL</span>
+        </h1>
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          <div className="h-1 w-20 bg-[var(--gold)] rounded-full" />
+          <p className="text-[var(--text-secondary)] font-medium tracking-[0.3em] text-xs uppercase">
+            {lang ? 'MANAGE YOUR PERSONAL SETTINGS' : 'GERENCIE SUAS CONFIGURAÇÕES PESSOAIS'}
+          </p>
+        </div>
       </div>
 
-      <div className="card p-6 mb-6">
-        <div className="flex items-center gap-4">
-          <div className="relative group">
-            <div className="w-20 h-20 rounded-full bg-[#2a2a2a] overflow-hidden border-2 border-[#f5b800]">
-              {photoPreview ? (
-                <img src={photoPreview} alt={user?.name} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-[#f5b800] font-bold text-2xl">
-                  {user?.name?.charAt(0).toUpperCase()}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        {/* Sidebar Profile Card */}
+        <div className="lg:col-span-4">
+          <div className="card p-8 bg-[var(--bg-card)] border-[var(--border)] text-center shadow-2xl relative overflow-hidden group">
+            {/* Background Decorative */}
+            <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-br from-[var(--gold)] to-[var(--gold-dark)] opacity-10 group-hover:opacity-20 transition-opacity" />
+            
+            <div className="relative z-10">
+              <div className="relative inline-block mb-6">
+                <div className="w-32 h-32 rounded-[2.5rem] bg-[var(--bg-main)] border-2 border-[var(--border)] group-hover:border-[var(--gold)] overflow-hidden transition-all duration-500 shadow-2xl">
+                  {photoPreview ? (
+                    <img src={photoPreview} alt={user?.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[var(--gold)] font-display font-black text-5xl italic bg-[var(--bg-main)]">
+                      {user?.name?.charAt(0).toUpperCase()}
+                    </div>
+                  )}
                 </div>
-              )}
+                <label className="absolute -bottom-2 -right-2 w-12 h-12 rounded-2xl bg-[var(--gold)] text-black flex items-center justify-center cursor-pointer shadow-xl hover:bg-white transition-all hover:scale-110 active:scale-95 border-4 border-[var(--bg-card)]">
+                  <Icons.Camera size={20} />
+                  <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
+                </label>
+              </div>
+
+              <h2 className="font-display font-black text-2xl text-[var(--text-primary)] uppercase tracking-tighter mb-1 italic">
+                {user?.name}
+              </h2>
+              <p className="text-[var(--text-secondary)] text-xs font-medium mb-4 italic">{user?.email}</p>
+              
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[var(--gold)]/10 border border-[var(--gold)]/20 text-[var(--gold)] text-[10px] font-black tracking-widest uppercase italic">
+                {user?.role === 'admin' ? 'ADMIN MASTER' : (user?.role_label || 'MEMBRO CLUB')}
+              </div>
             </div>
-            <label className="absolute inset-0 rounded-full flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
-              <Icons.Camera size={20} className="text-white" />
-              <input type="file" accept="image/*" onChange={handlePhotoChange} className="hidden" />
-            </label>
-          </div>
-          <div>
-            <h2 className="font-display font-bold text-xl text-white">{user?.name}</h2>
-            <p className="text-[#a0a0a0] text-sm">{user?.email}</p>
-            <span className="badge badge-warning mt-1">
-              {user?.role === 'admin' ? 'ADMIN' : 'CLIENTE'}
-            </span>
+
+            <div className="mt-10 pt-8 border-t border-[var(--border)] flex flex-col gap-3">
+              <button 
+                onClick={() => { logout(); navigate('/'); }}
+                className="flex items-center justify-center gap-3 py-4 rounded-2xl bg-[var(--bg-main)] border border-[var(--border)] text-red-500 font-black text-[10px] tracking-[0.2em] uppercase hover:bg-red-500 hover:text-white transition-all shadow-lg group/logout"
+              >
+                <Icons.LogOut size={16} className="group-hover/logout:-translate-x-1 transition-transform" />
+                {lang ? 'SIGN OUT' : 'SAIR DA CONTA'}
+              </button>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="flex gap-2 mb-6 border-b border-[#2a2a2a] pb-2">
-        {[
-          { key: 'info', label: lang ? 'Personal Info' : 'Dados Pessoais' },
-          { key: 'password', label: lang ? 'Password' : 'Senha' },
-        ].map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${tab === t.key ? 'text-[#f5b800] border-b-2 border-[#f5b800]' : 'text-[#a0a0a0]'}`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+        {/* Main Content Area */}
+        <div className="lg:col-span-8 space-y-6">
+          <div className="flex gap-4 mb-2 p-1 bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl w-fit">
+            {[
+              { key: 'info', label: lang ? 'Personal' : 'Dados', icon: <Icons.User size={16} /> },
+              { key: 'password', label: lang ? 'Security' : 'Segurança', icon: <Icons.Lock size={16} /> },
+            ].map(t => (
+              <button 
+                key={t.key} 
+                onClick={() => setTab(t.key)}
+                className={`flex items-center gap-3 px-6 py-3 text-[10px] font-black tracking-widest uppercase rounded-xl transition-all ${
+                  tab === t.key 
+                    ? 'bg-[var(--gold)] text-black shadow-lg' 
+                    : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                }`}
+              >
+                {t.icon}
+                {t.label}
+              </button>
+            ))}
+          </div>
 
-      {message && (
-        <div className={`p-3 rounded-lg mb-4 text-sm ${message.includes('!') ? 'bg-[rgba(34,197,94,0.1)] border border-[rgba(34,197,94,0.3)] text-green-400' : 'bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] text-red-400'}`}>
-          {message}
+          {message && (
+            <div className={`p-4 rounded-2xl text-xs font-bold flex items-center gap-3 animate-in slide-in-from-top-2 duration-300 ${
+              message.includes('!') 
+                ? 'bg-green-500/10 border border-green-500/20 text-green-500' 
+                : 'bg-red-500/10 border border-red-500/20 text-red-500'
+            }`}>
+              <Icons.Info size={18} />
+              {message.toUpperCase()}
+            </div>
+          )}
+
+          <div className="card p-8 md:p-10 bg-[var(--bg-card)] border-[var(--border)] shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {tab === 'info' && (
+              <div className="space-y-8">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-[var(--text-secondary)] text-[10px] font-black tracking-[0.2em] uppercase italic ml-1">
+                      <Icons.Type size={14} className="text-[var(--gold)]" /> {lang ? 'FULL NAME' : 'NOME COMPLETO'}
+                    </label>
+                    <input 
+                      value={form.name} 
+                      onChange={e => setForm({ ...form, name: e.target.value })}
+                      className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-2xl px-6 py-4 text-[var(--text-primary)] text-sm focus:border-[var(--gold)]/50 transition-all outline-none font-bold" 
+                      placeholder="Seu nome" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-[var(--text-secondary)] text-[10px] font-black tracking-[0.2em] uppercase italic ml-1">
+                      <Icons.Mail size={14} className="text-[var(--gold)]" /> {lang ? 'EMAIL ADDRESS' : 'E-MAIL DE ACESSO'}
+                    </label>
+                    <input 
+                      type="email" 
+                      value={form.email} 
+                      onChange={e => setForm({ ...form, email: e.target.value })}
+                      className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-2xl px-6 py-4 text-[var(--text-primary)] text-sm focus:border-[var(--gold)]/50 transition-all outline-none font-bold" 
+                      placeholder="seu@email.com" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-[var(--text-secondary)] text-[10px] font-black tracking-[0.2em] uppercase italic ml-1">
+                      <Icons.Phone size={14} className="text-[var(--gold)]" /> {lang ? 'PHONE NUMBER' : 'TELEFONE / WHATSAPP'}
+                    </label>
+                    <input 
+                      value={form.phone} 
+                      onChange={e => setForm({ ...form, phone: e.target.value })}
+                      className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-2xl px-6 py-4 text-[var(--text-primary)] text-sm focus:border-[var(--gold)]/50 transition-all outline-none font-mono" 
+                      placeholder="(49) 99999-9999" 
+                    />
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleSaveProfile} 
+                  disabled={saving} 
+                  className="w-full group relative py-5 bg-[var(--gold)] text-black font-black text-[10px] tracking-[0.3em] uppercase rounded-2xl transition-all duration-500 shadow-xl shadow-[var(--gold)]/10 active:scale-95 disabled:opacity-50 overflow-hidden"
+                >
+                  <span className="relative z-10 flex items-center justify-center gap-3">
+                    {saving ? <Icons.RefreshCw size={18} className="animate-spin" /> : <Icons.Check size={18} />}
+                    {saving ? (lang ? 'SAVING...' : 'SALVANDO...') : (lang ? 'CONFIRM CHANGES' : 'CONFIRMAR ALTERAÇÕES')}
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {tab === 'password' && (
+              <div className="space-y-8">
+                <div className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-[var(--text-secondary)] text-[10px] font-black tracking-[0.2em] uppercase italic ml-1">
+                      <Icons.Lock size={14} className="text-[var(--gold)]" /> {lang ? 'CURRENT PASSWORD' : 'SENHA ATUAL'}
+                    </label>
+                    <div className="relative">
+                      <input 
+                        type={showCurrent ? 'text' : 'password'} 
+                        value={passwordForm.currentPassword}
+                        onChange={e => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                        className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-2xl px-6 py-4 text-[var(--text-primary)] text-sm focus:border-[var(--gold)]/50 transition-all outline-none font-mono tracking-widest" 
+                      />
+                      <button 
+                        onClick={() => setShowCurrent(!showCurrent)} 
+                        className="absolute right-6 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]/30 hover:text-[var(--gold)] transition-colors"
+                      >
+                        {showCurrent ? <Icons.EyeOff size={18} /> : <Icons.Eye size={18} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-[var(--text-secondary)] text-[10px] font-black tracking-[0.2em] uppercase italic ml-1">
+                        <Icons.Zap size={14} className="text-[var(--gold)]" /> {lang ? 'NEW PASSWORD' : 'NOVA SENHA'}
+                      </label>
+                      <div className="relative">
+                        <input 
+                          type={showNew ? 'text' : 'password'} 
+                          value={passwordForm.newPassword}
+                          onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                          className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-2xl px-6 py-4 text-[var(--text-primary)] text-sm focus:border-[var(--gold)]/50 transition-all outline-none font-mono tracking-widest" 
+                        />
+                        <button 
+                          onClick={() => setShowNew(!showNew)} 
+                          className="absolute right-6 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]/30 hover:text-[var(--gold)] transition-colors"
+                        >
+                          {showNew ? <Icons.EyeOff size={18} /> : <Icons.Eye size={18} />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="flex items-center gap-2 text-[var(--text-secondary)] text-[10px] font-black tracking-[0.2em] uppercase italic ml-1">
+                        <Icons.ShieldCheck size={14} className="text-[var(--gold)]" /> {lang ? 'CONFIRM' : 'CONFIRMAR'}
+                      </label>
+                      <input 
+                        type="password" 
+                        value={passwordForm.confirmPassword}
+                        onChange={e => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                        className="w-full bg-[var(--bg-main)] border border-[var(--border)] rounded-2xl px-6 py-4 text-[var(--text-primary)] text-sm focus:border-[var(--gold)]/50 transition-all outline-none font-mono tracking-widest" 
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={handleChangePassword} 
+                  disabled={saving} 
+                  className="w-full group relative py-5 bg-[var(--gold)] text-black font-black text-[10px] tracking-[0.3em] uppercase rounded-2xl transition-all duration-500 shadow-xl shadow-[var(--gold)]/10 active:scale-95 disabled:opacity-50 overflow-hidden"
+                >
+                  <span className="relative z-10 flex items-center justify-center gap-3">
+                    {saving ? <Icons.RefreshCw size={18} className="animate-spin" /> : <Icons.Lock size={18} />}
+                    {saving ? (lang ? 'CHANGING...' : 'ALTERANDO...') : (lang ? 'UPDATE PASSWORD' : 'ATUALIZAR SENHA')}
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+          
+          {/* Support Info */}
+          <div className="p-6 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 text-[11px] font-medium flex items-start gap-4 leading-relaxed shadow-lg shadow-blue-500/5 italic">
+            <Icons.Info size={20} className="shrink-0 mt-0.5 text-blue-500" />
+            <p>
+              {lang 
+                ? 'Your profile data is protected. Photo updates are processed instantly across the platform. If you encounter any issues, please contact our master barber support.'
+                : 'Seus dados de perfil estão protegidos. Atualizações de foto são processadas instantaneamente em toda a plataforma. Em caso de dúvidas, entre em contato com o suporte master.'}
+            </p>
+          </div>
         </div>
-      )}
-
-      {tab === 'info' && (
-        <div className="space-y-4">
-          <div>
-            <label className="block text-[#a0a0a0] text-xs mb-2 tracking-widest">{lang ? 'FULL NAME' : 'NOME COMPLETO'}</label>
-            <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-              className="input-dark" placeholder="Seu nome" />
-          </div>
-          <div>
-            <label className="block text-[#a0a0a0] text-xs mb-2 tracking-widest">{lang ? 'EMAIL' : 'E-MAIL'}</label>
-            <input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })}
-              className="input-dark" placeholder="seu@email.com" />
-          </div>
-          <div>
-            <label className="block text-[#a0a0a0] text-xs mb-2 tracking-widest">{lang ? 'PHONE' : 'TELEFONE'}</label>
-            <input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })}
-              className="input-dark" placeholder="(00) 00000-0000" />
-          </div>
-          <button onClick={handleSaveProfile} disabled={saving} className="btn-gold w-full py-3 text-sm">
-            {saving ? (lang ? 'SAVING...' : 'SALVANDO...') : (lang ? 'SAVE CHANGES' : 'SALVAR ALTERAÇÕES')}
-          </button>
-        </div>
-      )}
-
-      {tab === 'password' && (
-        <div className="space-y-4">
-          <div className="relative">
-            <label className="block text-[#a0a0a0] text-xs mb-2 tracking-widest">{lang ? 'CURRENT PASSWORD' : 'SENHA ATUAL'}</label>
-            <input type={showCurrent ? 'text' : 'password'} value={passwordForm.currentPassword}
-              onChange={e => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
-              className="input-dark pr-10" />
-            <button onClick={() => setShowCurrent(!showCurrent)} className="absolute right-3 top-8 text-[#a0a0a0]">
-              {showCurrent ? <Icons.EyeOff size={16} /> : <Icons.Eye size={16} />}
-            </button>
-          </div>
-          <div className="relative">
-            <label className="block text-[#a0a0a0] text-xs mb-2 tracking-widest">{lang ? 'NEW PASSWORD' : 'NOVA SENHA'}</label>
-            <input type={showNew ? 'text' : 'password'} value={passwordForm.newPassword}
-              onChange={e => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
-              className="input-dark pr-10" />
-            <button onClick={() => setShowNew(!showNew)} className="absolute right-3 top-8 text-[#a0a0a0]">
-              {showNew ? <Icons.EyeOff size={16} /> : <Icons.Eye size={16} />}
-            </button>
-          </div>
-          <div>
-            <label className="block text-[#a0a0a0] text-xs mb-2 tracking-widest">{lang ? 'CONFIRM PASSWORD' : 'CONFIRMAR SENHA'}</label>
-            <input type="password" value={passwordForm.confirmPassword}
-              onChange={e => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
-              className="input-dark" />
-          </div>
-          <button onClick={handleChangePassword} disabled={saving} className="btn-gold w-full py-3 text-sm">
-            {saving ? (lang ? 'CHANGING...' : 'ALTERANDO...') : (lang ? 'CHANGE PASSWORD' : 'ALTERAR SENHA')}
-          </button>
-        </div>
-      )}
-
-      <div className="mt-6 pt-4 border-t border-[#2a2a2a]">
-        <button onClick={() => { logout(); navigate('/'); }}
-          className="flex items-center gap-2 text-red-400 hover:text-red-300 text-sm transition-colors">
-          <Icons.LogOut size={16} />
-          {lang ? 'Logout' : 'Sair da conta'}
-        </button>
       </div>
     </div>
   );

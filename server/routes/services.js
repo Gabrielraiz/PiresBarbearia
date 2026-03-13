@@ -34,28 +34,27 @@ router.put('/:id', authenticateAdmin, (req, res) => {
 });
 
 router.delete('/:id', authenticateAdmin, (req, res) => {
-  const { force } = req.query;
   const db = getDb();
   
-  if (force === 'true') {
-    try {
-      // Tentar deletar definitivamente
-      db.prepare('DELETE FROM services WHERE id = ?').run(req.params.id);
-      return res.json({ message: 'Serviço excluído permanentemente' });
-    } catch (error) {
-      if (error.message.includes('FOREIGN KEY')) {
-        return res.status(400).json({ 
-          message: 'Não é possível excluir: este serviço possui agendamentos vinculados. Desative-o em vez disso.',
-          canDisable: true 
-        });
-      }
-      throw error;
+  try {
+    // Tentar deletar definitivamente
+    const result = db.prepare('DELETE FROM services WHERE id = ?').run(req.params.id);
+    
+    if (result.changes === 0) {
+      return res.status(404).json({ message: 'Serviço não encontrado' });
     }
+    
+    res.json({ message: 'Serviço excluído permanentemente do sistema' });
+  } catch (error) {
+    if (error.message.includes('FOREIGN KEY')) {
+      // Se houver agendamentos, apenas desativa para não quebrar o histórico
+      db.prepare('UPDATE services SET active = 0 WHERE id = ?').run(req.params.id);
+      return res.json({ 
+        message: 'O serviço possui agendamentos vinculados e foi apenas desativado para preservar o histórico.' 
+      });
+    }
+    res.status(500).json({ message: 'Erro ao excluir serviço: ' + error.message });
   }
-
-  // Comportamento padrão: apenas desativa
-  db.prepare('UPDATE services SET active = 0 WHERE id = ?').run(req.params.id);
-  res.json({ message: 'Serviço desativado' });
 });
 
 module.exports = router;
